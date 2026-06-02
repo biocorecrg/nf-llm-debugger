@@ -1,29 +1,26 @@
 plugins {
-    id 'groovy'
-    id 'java'
+    id 'io.nextflow.nextflow-plugin' version '1.0.0-beta.6'
 }
 
 group = 'nextflow'
 version = '1.0.0'
+
+nextflowPlugin {
+    nextflowVersion = '24.04.0'
+    provider = 'Luca Cozzuto'
+    className = 'nextflow.debugger.DebuggerPlugin'
+    extensionPoints = [
+        'nextflow.debugger.DebuggerFactory'
+    ]
+}
 
 repositories {
     mavenCentral()
     maven { url 'https://jitpack.io' }
 }
 
-dependencies {
-    compileOnly 'io.nextflow:nextflow:24.04.0'
-    compileOnly 'org.pf4j:pf4j:3.10.0'
-    compileOnly 'org.slf4j:slf4j-api:2.0.7'
-}
-
-jar {
-    manifest {
-        attributes(
-            'Plugin-Id': 'nf-llm-debugger',
-            'Plugin-Class': 'nextflow.debugger.DebuggerPlugin',
-            'Plugin-Version': version,
-            'Plugin-Provider': 'Luca Cozzuto'
-        )
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(23)
     }
 }
