@@ -51,8 +51,20 @@ class DebuggerObserver implements TraceObserver {
 
         log.info("🤖 [nf-llm-debugger] Sending error report to LLM (model: ${model})...")
 
+        // Resolve custom documentation parameter if configured
+        def docsPath = params.containsKey('llm_docs') && params.llm_docs ? params.llm_docs.toString() : null
+        def docsText = ""
+        if (docsPath) {
+            def docFile = new File(docsPath)
+            if (docFile.exists()) {
+                docsText = "\n\nAdditional pipeline documentation for reference:\n" + docFile.text
+            } else {
+                log.warn("[nf-llm-debugger] Documentation file not found: ${docsPath}")
+            }
+        }
+
         // Construct system instruction
-        def systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes."
+        def systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes." + docsText
 
         // Create a temporary JSON payload file to safely handle quotes and newlines
         def myFile = File.createTempFile('llm_payload', '.json')

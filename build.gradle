@@ -1,22 +1,26 @@
 plugins {
-    id 'io.nextflow.nextflow-plugin' version '1.0.0-beta.6'
+    id 'io.nextflow.nextflow-plugin' version '1.0.0-beta.14'
 }
 
 group = 'nextflow'
-version = '1.0.0'
+version = '1.0.2'
 
 nextflowPlugin {
     nextflowVersion = '24.04.0'
-    provider = 'Luca Cozzuto'
+    provider = 'CRG'
     className = 'nextflow.debugger.DebuggerPlugin'
     extensionPoints = [
         'nextflow.debugger.DebuggerFactory'
     ]
+    registry {
+        apiKey = System.getenv('NPR_API_KEY') ?: (project.findProperty('npr.apiKey') ?: '')
+    }
+
 }
 
 repositories {
     mavenCentral()
-    maven { url 'https://jitpack.io' }
+    maven { url = uri('https://jitpack.io') }
 }
 
 java {

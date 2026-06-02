@@ -1,60 +1,122 @@
-# 🤖 nf-llm-debugger
+# nf-llm-debugger
 
-A Nextflow plugin that automatically intercepts pipeline and process failures at runtime, diagnoses them using local or remote Large Language Models (LLMs), and outputs clear, actionable solutions directly to your console and Nextflow logs!
+A Nextflow plugin that automatically intercepts pipeline and process failures at runtime, diagnoses them using local or remote Large Language Models (LLMs), and outputs clear, actionable solutions directly to your console and Nextflow logs.
 
----
+## Summary
 
-## ✨ Features
+The `nf-llm-debugger` plugin hooks directly into the Nextflow runtime engine to capture process execution failures (such as non-zero exit codes, out-of-memory events, or command errors). It retrieves the failed task context and log outputs, compiles them into a structured report, and queries an OpenAI-compatible Large Language Model (LLM) API (such as Llamafile, Ollama, OpenAI, or LocalAI) to generate an instantaneous, highly accurate error diagnosis.
 
-- **Runtime Error Interception**: Automatically hooks into the Nextflow JVM lifecycle (`TraceObserver`) to catch failures in processes or workflows in real time.
-- **Purely Generic & OpenAI-Compatible**: Communicates with any OpenAI-compatible API endpoint (such as **Llamafile**, **Ollama**, **LocalAI**, **OpenAI**, etc.).
-- **Zero-Touch Local Analysis**: Seamless out-of-the-box support for offline local LLMs running on your machine.
-- **Actionable Debugging Steps**: Translates cryptic log outputs and exit codes (such as exit status `126`, `127`, `1`, etc.) into easy-to-read, structured diagnostics.
+Key Features:
+- **Automatic Runtime Interception**: Monitors the task execution lifecycle (`TraceObserver`) and automatically analyzes errors.
+- **Universal Compatibility**: Works with any local or remote OpenAI-compatible completion endpoint (`/v1/chat/completions`).
+- **No-Key Local Defaults**: Configured out-of-the-box to use local, offline LLMs running via Llamafile or Ollama.
+- **Actionable Diagnoses**: Translates raw stack traces and OS exit codes (like `126`, `127`, `137`) into human-readable steps.
 
----
+## Get Started
 
-## 🚀 Quick Start
+### 1. Requirements
 
-### 1. Enable the Plugin
+- Nextflow 24.04.0 or newer
+- Java 17 or newer
+
+### 2. Enable the Plugin
 
 Add the plugin declaration to the `plugins` block inside your `nextflow.config`:
 
 ```groovy
 plugins {
-    id 'nf-llm-debugger@1.0.0'
+    id 'nf-llm-debugger@1.0.2'
 }
 ```
 
-### 2. Configure Your LLM Endpoint
+### 3. Configure Your LLM Endpoint and Context
 
-Configure your LLM server parameters inside your `nextflow.config` (in the `params` block) or pass them in a parameters file (e.g., `params.yaml`):
+Define your API parameters inside the `params` block of your `nextflow.config`:
 
-```yaml
-# Example: Local Llamafile / Ollama Server (No API Key required)
-llm_address: "http://127.0.0.1:8080/v1/chat/completions"
-llm_model: "LLaMA_CPP"
+```groovy
+params {
+    llm_address = 'http://localhost:8080/v1/chat/completions' // Your local or remote LLM endpoint
+    llm_model = 'LLaMA_CPP'                                   // The model identifier
+    llm_docs = 'nf-debugger-docs.md'                          // Optional path to pipeline troubleshooting documentation
+}
 ```
 
-If you use a remote OpenAI-compatible service requiring an API key, export it in your shell environment:
+If your LLM endpoint requires authentication (e.g. OpenAI or Gemini), export your API key in your shell environment:
 
 ```bash
-export LLM_API_KEY="your-api-key-here"
+export LLM_API_KEY="your-api-key"
 ```
-*(The plugin will automatically detect and resolve `LLM_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY` directly from the environment).*
 
----
+## Examples
 
-## 🛠️ Configuration Parameters
+### 1. Deliberately Failing Pipeline
+
+Below is a simple Nextflow pipeline (`main.nf`) designed to trigger an error by attempting to read a non-existent file:
+
+```groovy
+nextflow.enable.dsl=2
+
+process failProcess {
+    script:
+    """
+    echo "Starting a process that will fail..."
+    cat nonexistent_file.txt
+    """
+}
+
+workflow {
+    failProcess()
+}
+```
+
+### 2. Expected Output with LLM Diagnosis
+
+When you run the pipeline above with `nf-llm-debugger` enabled:
+
+```bash
+nextflow run main.nf
+```
+
+The plugin automatically intercepts the task failure, sends the context to the configured LLM, and prints a structured diagnosis directly to the console:
+
+```text
+executor >  local (1)
+[03/4f4d68] failProcess | 0 of 1 ✘
+🤖 [nf-llm-debugger] onFlowComplete - Success: false
+🤖 [nf-llm-debugger] onFlowComplete - Error: Process `failProcess` terminated with an error exit status (1)
+🤖 [nf-llm-debugger] Sending error report to LLM (model: LLaMA_CPP)...
+
+================================================================================
+🤖 [nf-llm-debugger] LLM ERROR DIAGNOSIS:
+================================================================================
+🤖 [DIAGNOSIS] The task 'failProcess' failed because the command tried to execute
+'cat nonexistent_file.txt', but the file 'nonexistent_file.txt' does not exist
+in the task's working directory.
+
+💡 SUGGESTIONS:
+1. Double-check if the file name is spelled correctly in your process script.
+2. If this file is an input, make sure you declared it correctly in the `input:`
+   block of the process so Nextflow stages it into the work directory.
+================================================================================
+
+ERROR ~ Error executing process > 'failProcess'
+
+Caused by:
+  Process `failProcess` terminated with an error exit status (1)
+```
+
+## Configuration
 
 | Parameter | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- |
 | `params.llm_address` | String | `"http://localhost:8080/v1/chat/completions"` | The URL endpoint of the OpenAI-compatible API. |
 | `params.llm_model` | String | `"LLaMA_CPP"` | The model identifier to send in the request payload. |
 | `params.llm_api_key` | String | `""` | The API Key. If left empty, the plugin looks up standard env variables. |
+| `params.llm_docs` | String | `""` | Optional file path to custom markdown pipeline/tool documentation. If set and the file exists, it is appended to the system prompt to guide LLM debugging. |
 
----
-
+You can supply additional pipeline/tool-specific troubleshooting documentation to improve the quality of the LLM diagnoses.
+If `params.llm_docs` is configured (e.g., set to `'nf-debugger-docs.md'`), the plugin searches for that file path relative to the Nextflow execution directory (or absolute path if provided) and appends its contents to the LLM system prompt context.
 
 ## 📄 License
 
-Dveloped by **Luca Cozzuto**. Licensed under the [MIT License](LICENSE).
+Developed by **CRG** and **Luca Cozzuto**. Licensed under the [MIT License](LICENSE).
