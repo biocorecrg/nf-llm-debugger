@@ -54,24 +54,6 @@ export LLM_API_KEY="your-api-key-here"
 
 ---
 
-## 📦 How to Compile and Install Locally
-
-To build and run the plugin locally on your machine:
-
-### 1. Compile the Plugin
-Make sure you have Java and Gradle installed, then build the project:
-```bash
-gradle clean build
-```
-
-### 2. Install Locally to Nextflow Plugins Cache
-Create the local plugin folder and copy the compiled classes:
-```bash
-mkdir -p ~/.nextflow/plugins/nf-llm-debugger-1.0.0/classes/META-INF
-cp -r build/classes/groovy/main/* ~/.nextflow/plugins/nf-llm-debugger-1.0.0/classes/
-```
-
----
 
 ## 📄 License
 
