@@ -1,0 +1,4 @@
+Plugin-Id: nf-debugger
+Plugin-Class: nextflow.debugger.DebuggerPlugin
+Plugin-Version: 1.0.0
+Plugin-Provider: Luca Cozzuto
