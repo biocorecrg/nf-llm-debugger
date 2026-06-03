@@ -41,6 +41,16 @@ params {
 }
 ```
 
+Example for GEMINI
+
+```groovy
+params {
+    llm_address = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+    llm_model   = 'gemini-2.5-flash-lite'
+    llm_docs = 'nf-debugger-docs.md'                          
+}
+```
+
 If your LLM endpoint requires authentication (e.g. OpenAI or Gemini), export your API key in your shell environment:
 
 ```bash
