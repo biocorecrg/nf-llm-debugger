@@ -8,6 +8,11 @@ import nextflow.trace.TraceRecord
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import groovy.json.JsonSlurper
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.net.URI
+import java.time.Duration
 
 class DebuggerObserver implements TraceObserver {
     private static final Logger log = LoggerFactory.getLogger(DebuggerObserver)
@@ -66,14 +71,11 @@ class DebuggerObserver implements TraceObserver {
         // Construct system instruction
         def systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes." + docsText
 
-        // Create a temporary JSON payload file to safely handle quotes and newlines
-        def myFile = File.createTempFile('llm_payload', '.json')
-
         // Safely escape quotes and newlines for valid JSON
         def escapedSystem = systemPrompt.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "")
         def escapedUser = report.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "")
 
-        myFile.text = """{
+        def payloadJson = """{
   "model": "${model}",
   "messages": [
     {"role": "system", "content": "${escapedSystem}"},
@@ -82,23 +84,27 @@ class DebuggerObserver implements TraceObserver {
   "temperature": 0.2
 }"""
 
-        // Construct curl command
-        def cmd = ["curl", "--connect-timeout", "15", "-s", "-X", "POST", "-H", "Content-Type: application/json"]
-        if (apiKey) {
-            cmd << "-H"
-            cmd << "Authorization: Bearer ${apiKey}"
-        }
-        cmd << "-d"
-        cmd << "@${myFile.absolutePath}"
-        cmd << resolvedEndpoint
-
         def explanation = null
         try {
-            def proc = cmd.execute()
-            proc.waitFor()
+            def client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .build()
 
-            if (proc.exitValue() == 0) {
-                def responseText = proc.text
+            def reqBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(resolvedEndpoint))
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payloadJson))
+
+            if (apiKey) {
+                reqBuilder.header("Authorization", "Bearer ${apiKey}")
+            }
+
+            def request = reqBuilder.build()
+            def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+
+            if (response.statusCode() == 200) {
+                def responseText = response.body()
                 def slurper = new JsonSlurper()
                 def json = slurper.parseText(responseText)
                 
@@ -122,13 +128,11 @@ class DebuggerObserver implements TraceObserver {
                     log.info("=" * 80 + "\n")
                 }
             } else {
-                log.warn("[nf-llm-debugger] Could not connect to LLM server at ${resolvedEndpoint} (Exit code: ${proc.exitValue()}).")
+                log.warn("[nf-llm-debugger] LLM server at ${resolvedEndpoint} returned HTTP ${response.statusCode()}: ${response.body()}")
             }
         }
         catch (e) {
             log.warn("[nf-llm-debugger] Error running LLM diagnosis: ${e.message}")
         }
-
-        myFile.delete()
     }
 }
