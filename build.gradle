@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'nextflow'
-version = '1.0.4'
+version = '1.0.5'
 
 nextflowPlugin {
     nextflowVersion = '24.04.0'
@@ -21,6 +21,26 @@ nextflowPlugin {
 repositories {
     mavenCentral()
     maven { url = uri('https://jitpack.io') }
+}
+
+project.repositories.removeIf { repo ->
+    repo.name == 'maven' && repo.properties.containsKey('url') && repo.url.toString().contains("seqera.io")
+}
+
+dependencies {
+    implementation 'dev.langchain4j:langchain4j:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-open-ai:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-google-ai-gemini:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-anthropic:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-ollama:0.35.0'
+    compileOnly 'org.slf4j:slf4j-api:2.0.12'
+}
+
+configurations {
+    runtimeClasspath {
+        exclude group: 'org.slf4j'
+        exclude group: 'ch.qos.logback'
+    }
 }
 
 java {

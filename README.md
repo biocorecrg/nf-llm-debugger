@@ -25,37 +25,43 @@ Add the plugin declaration to the `plugins` block inside your `nextflow.config`:
 
 ```groovy
 plugins {
-    id 'nf-llm-debugger@1.0.4'
+    id 'nf-llm-debugger@1.0.5'
 }
 ```
 
 ### 3. Configure Your LLM Endpoint and Context
 
-Define your API parameters inside the `params` block of your `nextflow.config`:
+Define your API parameters inside the `params` block of your `nextflow.config`. You can specify a preset provider or configure a custom API URL using a single parameter:
 
 ```groovy
 params {
-    llm_address = 'http://localhost:8080/v1/chat/completions' // Your local or remote LLM endpoint
-    llm_model = 'LLaMA_CPP'                                   // The model identifier
-    llm_docs = 'nf-debugger-docs.md'                          // Optional path to pipeline troubleshooting documentation
+    // Can be a preset: 'gemini', 'claude', 'chatgpt', 'ollama', 'local'
+    // Or a custom URL: e.g., 'http://localhost:8080/v1' (auto-detects provider based on URL/model)
+    llm_endpoint = 'chatgpt' 
+
+    // Optional: Only needed to customize the model or troubleshooting docs
+    llm_model = 'gpt-4o-mini' 
+    llm_docs = 'nf-debugger-docs.md' 
 }
 ```
 
-Example for GEMINI
+Example for Gemini preset:
 
 ```groovy
 params {
-    llm_address = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-    llm_model   = 'gemini-2.5-flash-lite'
+    llm_endpoint = 'gemini'
+    // Optional: customize model (defaults to gemini-1.5-flash)
+    llm_model = 'gemini-2.5-flash-lite'
     llm_docs = 'nf-debugger-docs.md'                          
 }
 ```
 
-If your LLM endpoint requires authentication (e.g. OpenAI or Gemini), export your API key in your shell environment:
+If your LLM endpoint requires authentication, export the corresponding API key in your shell environment:
 
-```bash
-export LLM_API_KEY="your-api-key"
-```
+*   **Gemini**: `export GEMINI_API_KEY="your-gemini-key"`
+*   **Claude/Anthropic**: `export ANTHROPIC_API_KEY="your-anthropic-key"`
+*   **ChatGPT/OpenAI**: `export OPENAI_API_KEY="your-openai-key"`
+*   **Other/Local**: `export LLM_API_KEY="your-api-key"`
 
 ## Examples
 
@@ -119,9 +125,9 @@ Caused by:
 
 | Parameter | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- |
-| `params.llm_address` | String | `"http://localhost:8080/v1/chat/completions"` | The URL endpoint of the OpenAI-compatible API. |
-| `params.llm_model` | String | `"LLaMA_CPP"` | The model identifier to send in the request payload. |
-| `params.llm_api_key` | String | `""` | The API Key. If left empty, the plugin looks up standard env variables. |
+| `params.llm_endpoint` | String | `"local"` | The target LLM destination. Can be a preset (`"gemini"`, `"claude"`, `"chatgpt"`, `"ollama"`, `"local"`) or a custom API endpoint URL. |
+| `params.llm_model` | String | (depends on provider) | The model identifier (e.g. `gpt-4o-mini`, `gemini-1.5-flash`, `claude-3-5-sonnet-20241022`). |
+| `params.llm_api_key` | String | `""` | The API Key. If left empty, the plugin looks up provider-specific env variables. |
 | `params.llm_docs` | String | `""` | Optional file path to custom markdown pipeline/tool documentation. If set and the file exists, it is appended to the system prompt to guide LLM debugging. |
 
 You can supply additional pipeline/tool-specific troubleshooting documentation to improve the quality of the LLM diagnoses.

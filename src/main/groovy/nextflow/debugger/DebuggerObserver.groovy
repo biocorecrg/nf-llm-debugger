@@ -7,12 +7,13 @@ import nextflow.processor.TaskHandler
 import nextflow.trace.TraceRecord
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import groovy.json.JsonSlurper
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.net.URI
-import java.time.Duration
+import dev.langchain4j.model.chat.ChatLanguageModel
+import dev.langchain4j.model.openai.OpenAiChatModel
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel
+import dev.langchain4j.model.anthropic.AnthropicChatModel
+import dev.langchain4j.model.ollama.OllamaChatModel
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.UserMessage
 
 class DebuggerObserver implements TraceObserver {
     private static final Logger log = LoggerFactory.getLogger(DebuggerObserver)
@@ -24,7 +25,15 @@ class DebuggerObserver implements TraceObserver {
 
     @Override
     void onFlowError(TaskHandler handler, TraceRecord trace) {
+        if (handler == null) {
+            log.debug("🤖 [nf-llm-debugger] onFlowError called with null TaskHandler")
+            return
+        }
         def task = handler.getTask()
+        if (task == null) {
+            log.debug("🤖 [nf-llm-debugger] onFlowError TaskHandler returned null task")
+            return
+        }
         def errorReport = "Task ${task.name} [${task.id}] failed.\nWork Directory: ${task.workDir}\n\nError report:\n${task.errorReport ?: 'No error report available.'}"
         llmExplainError(errorReport)
     }
@@ -44,95 +53,172 @@ class DebuggerObserver implements TraceObserver {
         def params = session.binding.getVariable('params') as Map ?: [:]
         
         // Resolve parameters with safe defaults
-        def defaultAddress = params.containsKey('llamafile_address') ? params.llamafile_address : 'http://localhost:8080/v1/chat/completions'
-        def resolvedEndpoint = params.containsKey('llm_address') ? params.llm_address : defaultAddress
-        def model = params.containsKey('llm_model') ? params.llm_model : 'LLaMA_CPP'
-        def apiKey = params.containsKey('llm_api_key') ? params.llm_api_key : ''
+        def endpoint = params.containsKey('llm_endpoint') ? params.llm_endpoint?.toString()?.trim() : null
+        // Backward compatibility fallback to llm_address
+        if (!endpoint && params.containsKey('llm_address')) {
+            endpoint = params.llm_address?.toString()?.trim()
+        }
+        
+        def model = params.containsKey('llm_model') ? params.llm_model?.toString() : null
+        def apiKey = params.containsKey('llm_api_key') ? params.llm_api_key?.toString() : ''
 
-        // Resolve API key from environment if not explicitly set in config
-        if (!apiKey) {
-            apiKey = System.getenv("LLM_API_KEY") ?: (System.getenv("GEMINI_API_KEY") ?: System.getenv("OPENAI_API_KEY"))
+        // Default if not specified
+        if (!endpoint) {
+            endpoint = 'local'
         }
 
-        log.info("🤖 [nf-llm-debugger] Sending error report to LLM (model: ${model})...")
+        // Determine provider and custom address from endpoint
+        def provider = 'local'
+        def address = null
 
-        // Resolve custom documentation parameter if configured
-        def docsPath = params.containsKey('llm_docs') && params.llm_docs ? params.llm_docs.toString() : null
-        def docsText = ""
-        if (docsPath) {
-            def docFile = new File(docsPath)
-            if (docFile.exists()) {
-                docsText = "\n\nAdditional pipeline documentation for reference:\n" + docFile.text
+        def lowerEndpoint = endpoint.toLowerCase()
+        if (lowerEndpoint == 'gemini') {
+            provider = 'gemini'
+        } else if (lowerEndpoint == 'claude' || lowerEndpoint == 'anthropic') {
+            provider = 'claude'
+        } else if (lowerEndpoint == 'chatgpt' || lowerEndpoint == 'openai') {
+            provider = 'openai'
+        } else if (lowerEndpoint == 'ollama') {
+            provider = 'ollama'
+        } else if (lowerEndpoint == 'local' || lowerEndpoint == 'llamafile') {
+            provider = 'local'
+        } else {
+            // It's a custom URL!
+            address = endpoint
+            // Auto-detect provider based on URL pattern or model name
+            def lookupStr = address.toLowerCase() + " " + (model ?: "").toLowerCase()
+            if (lookupStr.contains("gemini") || lookupStr.contains("googleapis.com")) {
+                provider = 'gemini'
+            } else if (lookupStr.contains("claude") || lookupStr.contains("anthropic.com")) {
+                provider = 'claude'
+            } else if (lookupStr.contains("openai.com") || (model && model.startsWith("gpt-"))) {
+                provider = 'openai'
+            } else if (lookupStr.contains("ollama") || lookupStr.contains(":11434")) {
+                provider = 'ollama'
             } else {
-                log.warn("[nf-llm-debugger] Documentation file not found: ${docsPath}")
+                provider = 'local'
             }
         }
 
-        // Construct system instruction
-        def systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes." + docsText
+        ChatLanguageModel chatModel = null
+        log.info("🤖 [nf-llm-debugger] Initializing LLM using provider: ${provider}")
 
-        // Safely escape quotes and newlines for valid JSON
-        def escapedSystem = systemPrompt.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "")
-        def escapedUser = report.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "")
-
-        def payloadJson = """{
-  "model": "${model}",
-  "messages": [
-    {"role": "system", "content": "${escapedSystem}"},
-    {"role": "user", "content": "${escapedUser}"}
-  ],
-  "temperature": 0.2
-}"""
-
-        def explanation = null
         try {
-            def client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15))
-                .build()
+            switch (provider) {
+                case 'gemini':
+                    if (!apiKey) {
+                        apiKey = System.getenv("GEMINI_API_KEY") ?: System.getenv("LLM_API_KEY")
+                    }
+                    def geminiModel = model ?: 'gemini-1.5-flash'
+                    log.info("🤖 [nf-llm-debugger] Configured Gemini Model: ${geminiModel}")
+                    chatModel = GoogleAiGeminiChatModel.builder()
+                        .apiKey(apiKey)
+                        .modelName(geminiModel)
+                        .temperature(0.2)
+                        .build()
+                    break
 
-            def reqBuilder = HttpRequest.newBuilder()
-                .uri(URI.create(resolvedEndpoint))
-                .timeout(Duration.ofSeconds(60))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(payloadJson))
+                case 'claude':
+                case 'anthropic':
+                    if (!apiKey) {
+                        apiKey = System.getenv("ANTHROPIC_API_KEY") ?: System.getenv("LLM_API_KEY")
+                    }
+                    def anthropicModel = model ?: 'claude-3-5-sonnet-20241022'
+                    log.info("🤖 [nf-llm-debugger] Configured Claude Model: ${anthropicModel}")
+                    chatModel = AnthropicChatModel.builder()
+                        .apiKey(apiKey)
+                        .modelName(anthropicModel)
+                        .temperature(0.2)
+                        .build()
+                    break
 
-            if (apiKey) {
-                reqBuilder.header("Authorization", "Bearer ${apiKey}")
+                case 'openai':
+                case 'chatgpt':
+                    if (!apiKey) {
+                        apiKey = System.getenv("OPENAI_API_KEY") ?: System.getenv("LLM_API_KEY")
+                    }
+                    def openAiModel = model ?: 'gpt-4o-mini'
+                    log.info("🤖 [nf-llm-debugger] Configured ChatGPT Model: ${openAiModel}")
+                    chatModel = OpenAiChatModel.builder()
+                        .apiKey(apiKey)
+                        .modelName(openAiModel)
+                        .temperature(0.2)
+                        .build()
+                    break
+
+                case 'ollama':
+                    def ollamaAddress = address ?: 'http://localhost:11434'
+                    def ollamaModel = model ?: 'llama3'
+                    log.info("🤖 [nf-llm-debugger] Configured Ollama Model: ${ollamaModel} at ${ollamaAddress}")
+                    chatModel = OllamaChatModel.builder()
+                        .baseUrl(ollamaAddress)
+                        .modelName(ollamaModel)
+                        .temperature(0.2)
+                        .build()
+                    break
+
+                case 'local':
+                case 'llamafile':
+                default:
+                    def resolvedAddress = address ?: 'http://localhost:8080/v1'
+                    if (resolvedAddress.endsWith("/chat/completions")) {
+                        resolvedAddress = resolvedAddress.substring(0, resolvedAddress.length() - "/chat/completions".length())
+                    }
+                    if (resolvedAddress.endsWith("/")) {
+                        resolvedAddress = resolvedAddress.substring(0, resolvedAddress.length() - 1)
+                    }
+                    if (!apiKey) {
+                        apiKey = System.getenv("LLM_API_KEY") ?: System.getenv("OPENAI_API_KEY") ?: 'ignored'
+                    }
+                    def localModel = model ?: 'LLaMA_CPP'
+                    log.info("🤖 [nf-llm-debugger] Configured Local/Llamafile Model: ${localModel} at ${resolvedAddress}")
+                    chatModel = OpenAiChatModel.builder()
+                        .baseUrl(resolvedAddress)
+                        .modelName(localModel)
+                        .apiKey(apiKey)
+                        .temperature(0.2)
+                        .build()
+                    break
             }
 
-            def request = reqBuilder.build()
-            def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            if (!chatModel) {
+                throw new IllegalStateException("Failed to configure LLM chat model for provider: ${provider}")
+            }
 
-            if (response.statusCode() == 200) {
-                def responseText = response.body()
-                def slurper = new JsonSlurper()
-                def json = slurper.parseText(responseText)
-                
-                if (json instanceof Map) {
-                    if (json.containsKey('choices') && json.choices.size() > 0) {
-                        explanation = json.choices[0].message.content
-                    } else if (json.containsKey('error')) {
-                        log.warn("[nf-llm-debugger] LLM API returned error: ${json.error.message ?: json.error}")
-                    } else {
-                        log.warn("[nf-llm-debugger] Unexpected LLM response format: ${responseText}")
-                    }
+            // Resolve custom documentation parameter if configured
+            def docsPath = params.containsKey('llm_docs') && params.llm_docs ? params.llm_docs.toString() : null
+            def docsText = ""
+            if (docsPath) {
+                def docFile = new File(docsPath)
+                if (docFile.exists()) {
+                    docsText = "\n\nAdditional pipeline documentation for reference:\n" + docFile.text
                 } else {
-                    log.warn("[nf-llm-debugger] Unexpected LLM response (not a JSON Map): ${responseText}")
+                    log.warn("[nf-llm-debugger] Documentation file not found: ${docsPath}")
                 }
+            }
 
-                if (explanation) {
-                    log.info("\n" + "=" * 80)
-                    log.info("🤖 [nf-llm-debugger] LLM ERROR DIAGNOSIS:")
-                    log.info("=" * 80)
-                    log.info(explanation)
-                    log.info("=" * 80 + "\n")
-                }
+            // Construct system instruction
+            def systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes." + docsText
+
+            log.info("🤖 [nf-llm-debugger] Generating LLM diagnosis...")
+            def response = chatModel.generate([
+                new SystemMessage(systemPrompt),
+                new UserMessage(report)
+            ])
+
+            def explanation = response.content()?.text()
+            if (explanation) {
+                log.info("\n" + "=" * 80)
+                log.info("🤖 [nf-llm-debugger] LLM ERROR DIAGNOSIS:")
+                log.info("=" * 80)
+                log.info(explanation)
+                log.info("=" * 80 + "\n")
             } else {
-                log.warn("[nf-llm-debugger] LLM server at ${resolvedEndpoint} returned HTTP ${response.statusCode()}: ${response.body()}")
+                log.warn("[nf-llm-debugger] LLM returned an empty response.")
             }
         }
         catch (e) {
-            log.warn("[nf-llm-debugger] Error running LLM diagnosis: ${e.message}")
+            log.warn("[nf-llm-debugger] Error running LLM diagnosis: ${e.message}", e)
         }
     }
 }

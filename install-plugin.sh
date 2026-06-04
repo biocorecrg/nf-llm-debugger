@@ -6,7 +6,7 @@
 set -e
 
 PLUGIN_ID="nf-llm-debugger"
-PLUGIN_VERSION="1.0.4"
+PLUGIN_VERSION="1.0.5"
 PLUGIN_DIR="$HOME/.nextflow/plugins/${PLUGIN_ID}-${PLUGIN_VERSION}"
 ZIP_FILE="build/distributions/${PLUGIN_ID}-${PLUGIN_VERSION}.zip"
 
