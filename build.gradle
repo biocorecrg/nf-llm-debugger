@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'nextflow'
-version = '1.0.6'
+version = '1.0.7'
 
 nextflowPlugin {
     nextflowVersion = '24.04.0'

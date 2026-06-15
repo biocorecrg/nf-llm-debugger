@@ -199,13 +199,15 @@ class DebuggerObserver implements TraceObserver {
             }
 
             // Construct system instruction
-            def styleInstruction = ""
+            def systemPrompt = ""
             if (answerStyle == 'concise') {
-                styleInstruction = " Be as concise as possible."
+                systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report and explain the cause and the fix in one or two sentences. Do not write a long explanation or list of suggestions."
             } else if (answerStyle == 'extense' || answerStyle == 'extensive') {
-                styleInstruction = " Please provide a highly detailed and extensive explanation."
+                systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes. Please provide a highly detailed and extensive explanation."
+            } else {
+                systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes."
             }
-            def systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes." + styleInstruction + docsText
+            systemPrompt += docsText
 
             log.info("🤖 [nf-llm-debugger] Generating LLM diagnosis...")
             def response = chatModel.generate([
