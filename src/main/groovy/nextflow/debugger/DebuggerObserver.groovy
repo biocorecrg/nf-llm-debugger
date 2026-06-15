@@ -201,7 +201,7 @@ class DebuggerObserver implements TraceObserver {
             // Construct system instruction
             def systemPrompt = ""
             if (answerStyle == 'concise') {
-                systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report and explain the cause and the fix in one or two sentences. Do not write a long explanation or list of suggestions."
+                systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report and explain the cause and the fix in one or two sentences. Be extremely concise. Do NOT include any introductory or concluding text, bullet points, headers, lists, or detailed analysis. Your entire response must be at most two sentences."
             } else if (answerStyle == 'extense' || answerStyle == 'extensive') {
                 systemPrompt = "You are an expert bioinformatics pipeline debugger. Analyze the Nextflow pipeline error report, explain what went wrong in clear, understandable terms, and suggest specific actionable fixes. Please provide a highly detailed and extensive explanation."
             } else {
@@ -209,10 +209,15 @@ class DebuggerObserver implements TraceObserver {
             }
             systemPrompt += docsText
 
+            def userPrompt = report
+            if (answerStyle == 'concise') {
+                userPrompt += "\n\nCRITICAL: Keep your response extremely concise. Explain the cause and the fix in at most 1 or 2 sentences. Do NOT output lists, headers, bullet points, or background explanations."
+            }
+
             log.info("🤖 [nf-llm-debugger] Generating LLM diagnosis...")
             def response = chatModel.generate([
                 new SystemMessage(systemPrompt),
-                new UserMessage(report)
+                new UserMessage(userPrompt)
             ])
 
             def explanation = response.content()?.text()
