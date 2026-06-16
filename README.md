@@ -25,7 +25,7 @@ Add the plugin declaration to the `plugins` block inside your `nextflow.config`:
 
 ```groovy
 plugins {
-    id 'nf-llm-debugger@1.0.9'
+    id 'nf-llm-debugger@1.0.10'
 }
 ```
 
@@ -128,7 +128,7 @@ Caused by:
 | `params.llm_endpoint` | String | `"local"` | The target LLM destination. Can be a preset (`"gemini"`, `"claude"`, `"chatgpt"`, `"ollama"`, `"local"`) or a custom API endpoint URL. |
 | `params.llm_model` | String | (depends on provider) | The model identifier (e.g. `gpt-4o-mini`, `gemini-1.5-flash`, `claude-3-5-sonnet-20241022`). |
 | `params.llm_api_key` | String | `""` | The API Key. If left empty, the plugin looks up provider-specific env variables. |
-| `params.llm_answer` | String | `"standard"` | Controls the verbosity of the LLM diagnosis. Accepts `"concise"`, `"extense"`, or `"standard"`. |
+| `params.llm_answer` | String | `"concise"` | Controls the verbosity of the LLM diagnosis. Accepts `"concise"` (explains cause and fix in 1-2 sentences), `"standard"`, or `"extense"`. |
 | `params.llm_docs` | String | `""` | Optional file path to custom markdown pipeline/tool documentation. If set and the file exists, it is appended to the system prompt to guide LLM debugging. |
 
 You can supply additional pipeline/tool-specific troubleshooting documentation to improve the quality of the LLM diagnoses.

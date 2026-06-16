@@ -62,7 +62,7 @@ class DebuggerObserver implements TraceObserver {
         
         def model = params.containsKey('llm_model') ? params.llm_model?.toString() : null
         def apiKey = params.containsKey('llm_api_key') ? params.llm_api_key?.toString() : ''
-        def answerStyle = params.containsKey('llm_answer') ? params.llm_answer?.toString()?.toLowerCase()?.trim() : 'standard'
+        def answerStyle = params.containsKey('llm_answer') ? params.llm_answer?.toString()?.toLowerCase()?.trim() : 'concise'
 
         // Default if not specified
         if (!endpoint) {
@@ -89,7 +89,7 @@ class DebuggerObserver implements TraceObserver {
             address = endpoint
             // Auto-detect provider based on URL pattern or model name
             def lookupStr = address.toLowerCase() + " " + (model ?: "").toLowerCase()
-            if (lookupStr.contains("gemini") || lookupStr.contains("googleapis.com")) {
+            if (address.toLowerCase().contains("googleapis.com") || (model && model.toLowerCase().contains("gemini"))) {
                 provider = 'gemini'
             } else if (lookupStr.contains("claude") || lookupStr.contains("anthropic.com")) {
                 provider = 'claude'
