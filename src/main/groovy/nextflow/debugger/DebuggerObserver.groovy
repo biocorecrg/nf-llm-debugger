@@ -7,6 +7,7 @@ import nextflow.processor.TaskHandler
 import nextflow.trace.TraceRecord
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.time.Duration
 import dev.langchain4j.model.chat.ChatLanguageModel
 import dev.langchain4j.model.openai.OpenAiChatModel
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel
@@ -92,7 +93,7 @@ class DebuggerObserver implements TraceObserver {
                 provider = 'gemini'
             } else if (lookupStr.contains("claude") || lookupStr.contains("anthropic.com")) {
                 provider = 'claude'
-            } else if (lookupStr.contains("openai.com") || (model && model.startsWith("gpt-"))) {
+            } else if (lookupStr.contains("openai.com") || (model && (model.startsWith("gpt-") || model.startsWith("openai/")))) {
                 provider = 'openai'
             } else if (lookupStr.contains("ollama") || lookupStr.contains(":11434")) {
                 provider = 'ollama'
@@ -116,6 +117,7 @@ class DebuggerObserver implements TraceObserver {
                         .apiKey(apiKey)
                         .modelName(geminiModel)
                         .temperature(0.2)
+                        .timeout(Duration.ofSeconds(30))
                         .build()
                     break
 
@@ -130,6 +132,7 @@ class DebuggerObserver implements TraceObserver {
                         .apiKey(apiKey)
                         .modelName(anthropicModel)
                         .temperature(0.2)
+                        .timeout(Duration.ofSeconds(30))
                         .build()
                     break
 
@@ -144,6 +147,7 @@ class DebuggerObserver implements TraceObserver {
                         .apiKey(apiKey)
                         .modelName(openAiModel)
                         .temperature(0.2)
+                        .timeout(Duration.ofSeconds(30))
                         .build()
                     break
 
@@ -155,6 +159,7 @@ class DebuggerObserver implements TraceObserver {
                         .baseUrl(ollamaAddress)
                         .modelName(ollamaModel)
                         .temperature(0.2)
+                        .timeout(Duration.ofSeconds(30))
                         .build()
                     break
 
@@ -178,6 +183,7 @@ class DebuggerObserver implements TraceObserver {
                         .modelName(localModel)
                         .apiKey(apiKey)
                         .temperature(0.2)
+                        .timeout(Duration.ofSeconds(30))
                         .build()
                     break
             }
