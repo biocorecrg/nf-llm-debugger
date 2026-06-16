@@ -25,7 +25,7 @@ Add the plugin declaration to the `plugins` block inside your `nextflow.config`:
 
 ```groovy
 plugins {
-    id 'nf-llm-debugger@1.0.10'
+    id 'nf-llm-debugger@1.0.11'
 }
 ```
 

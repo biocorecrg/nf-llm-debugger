@@ -103,6 +103,7 @@ class DebuggerObserver implements TraceObserver {
         }
 
         ChatLanguageModel chatModel = null
+        log.info("🤖 [nf-llm-debugger] Debug parameters: endpoint=${endpoint}, address=${address}, model=${model}")
         log.info("🤖 [nf-llm-debugger] Initializing LLM using provider: ${provider}")
 
         try {
