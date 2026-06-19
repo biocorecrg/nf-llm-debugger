@@ -25,7 +25,7 @@ Add the plugin declaration to the `plugins` block inside your `nextflow.config`:
 
 ```groovy
 plugins {
-    id 'nf-llm-debugger@1.0.11'
+    id 'nf-llm-debugger@1.0.12'
 }
 ```
 
@@ -133,6 +133,24 @@ Caused by:
 
 You can supply additional pipeline/tool-specific troubleshooting documentation to improve the quality of the LLM diagnoses.
 If `params.llm_docs` is configured (e.g., set to `'nf-debugger-docs.md'`), the plugin searches for that file path relative to the Nextflow execution directory (or absolute path if provided) and appends its contents to the LLM system prompt context.
+
+## Activating the Plugin
+
+By default, the plugin is loaded but stays **inactive**. To activate it, you must explicitly enable it in your configuration:
+
+```groovy
+llm {
+    enabled = true
+}
+```
+
+Or pass it as a parameter:
+
+```groovy
+params {
+    llm_enabled = true
+}
+```
 
 ## 📄 License
 
